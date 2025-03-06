@@ -1,0 +1,67 @@
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: ebs-static
+spec:
+  accessModes:
+  - ReadWriteOnce #EBS volume should have readwriteonce, because it HD.
+  capacity:
+    storage: 10Gi  # give your volume storage
+  csi:
+    driver: ebs.csi.aws.com
+    fsType: ext4
+    volumeHandle: vol-051213af95a5d5c6f # give your volme id.
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: ebs-static
+spec:
+  storageClassName: "" # Empty string must be explicitly set otherwise default StorageClass will be set. for static provisioning this is empty
+  volumeName: ebs-static
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi   #We have 10GB but request is 5 GB
+---
+apiVersion: v1   #Deploymnet
+kind: Pod
+metadata:
+  name: app
+  labels:
+    demo: ebs-static
+spec:                   #Conatiner creation
+  containers:
+  - name: nginx
+    image: nginx
+    volumeMounts:
+    - name: nginx-data
+      mountPath: /usr/share/nginx/html
+  nodeSelector:      # This is for node label. if u want create a pod in selected zone use this label.
+    zone: 1b         ##kuberneties ebs-static pod is creating in zone: 1b node.
+  volumes:
+  - name: nginx-data
+    persistentVolumeClaim:
+      claimName: ebs-static
+---
+apiVersion: v1   #Service 
+kind: Service
+metadata:
+  name: ebs-static
+spec:
+  type: LoadBalancer
+  selector:
+    demo: ebs-static
+  ports:
+  - protocol: TCP
+    port: 80 #service-port
+    targetPort: 80 #container-port
+
+#kubectl apply -f 03-ebs-static.yaml
+#kubectl get nodes
+#kubectl exec -it app -- sh
+#echo "<h1> Hello from EBS static </h1>" > /usr/share/nginx/html/ebs.html
+#kubectl get svc --> check with loadbalance url working or not
+# Now the volume is "in use" attach to pod and if you delete the pod, The volume is "availbe" option.
+#if you create the pod again the volume is agiain "in use" option.
